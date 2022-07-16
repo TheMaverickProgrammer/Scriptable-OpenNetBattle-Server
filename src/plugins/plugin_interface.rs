@@ -67,4 +67,5 @@ pub trait PluginInterface {
     socket_address: std::net::SocketAddr,
     data: &[u8],
   );
+  fn handle_terminal_command(&mut self, net: &mut Net, player_id: &str, command_string: String);
 }

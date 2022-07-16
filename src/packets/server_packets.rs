@@ -75,6 +75,7 @@ enum ServerPacketId {
   ActorMinimapColor,
   SynchronizeUpdates,
   EndSynchronization,
+  TerminalResponse,
 }
 
 #[derive(Debug)]
@@ -333,6 +334,9 @@ pub enum ServerPacket<'a> {
   },
   SynchronizeUpdates,
   EndSynchronization,
+  TerminalResponse {
+    result_string: &'a str,
+  },
 }
 
 pub fn build_unreliable_packet(packet: ServerPacket) -> Vec<u8> {
@@ -889,6 +893,10 @@ pub fn build_packet(packet: ServerPacket) -> Vec<u8> {
     }
     ServerPacket::EndSynchronization => {
       write_u16(buf, ServerPacketId::EndSynchronization as u16);
+    }
+    ServerPacket::TerminalResponse { result_string } => {
+      write_u16(buf, ServerPacketId::TerminalResponse as u16);
+      write_string_u16(buf, result_string);
     }
   }
 

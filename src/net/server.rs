@@ -530,6 +530,10 @@ impl Server {
             .handle_battle_results(net, player_id, &battle_stats);
         }
         ClientPacket::ServerMessage { data } => {
+          // A client should never send a 'ServerMessage' packet directly
+          // since this is a server-to-server packet type.
+          // However, since this is a part of the ONB protocol packet types,
+          // we will include this edge-case for people making their own servers...
           // this should never happen but 🤷‍♂️
           if self.config.log_packets {
             debug!("Received ServerMessage packet from {}", socket_address);
@@ -538,6 +542,15 @@ impl Server {
           self
             .plugin_wrapper
             .handle_server_message(net, socket_address, &data);
+        }
+        ClientPacket::TerminalCommand { commands_string } => {
+          if self.config.log_packets {
+            debug!("Received TermincalCommand packet from {}", socket_address);
+          }
+
+          self
+            .plugin_wrapper
+            .handle_terminal_command(net, player_id, commands_string);
         }
       }
     } else {

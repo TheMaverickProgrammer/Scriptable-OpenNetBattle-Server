@@ -92,6 +92,9 @@ pub enum ClientPacket {
   BattleResults {
     battle_stats: BattleStats,
   },
+  TerminalCommand {
+    commands_string: String,
+  },
 }
 
 pub fn parse_client_packet(buf: &[u8]) -> Option<(PacketHeaders, ClientPacket)> {
@@ -244,6 +247,9 @@ fn parse_body(work_buf: &mut &[u8]) -> Option<ClientPacket> {
       }
 
       ClientPacket::BattleResults { battle_stats }
+    }),
+    28 => Some(ClientPacket::TerminalCommand {
+      commands_string: read_string_u16(work_buf)?,
     }),
     _ => None,
   }

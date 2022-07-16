@@ -762,6 +762,35 @@ impl PluginInterface for LuaPluginInterface {
       },
     );
   }
+
+  fn handle_terminal_command(&mut self, net: &mut Net, player_id: &str, command_string: String) {
+    let mut result_string: Option<String> = None;
+
+    handle_event(
+      &mut self.scripts,
+      &self.all_scripts,
+      &mut self.widget_trackers,
+      &mut self.battle_trackers,
+      &mut self.promise_manager,
+      &mut self.lua_api,
+      net,
+      |lua_ctx, callback| {
+        let event = lua_ctx.create_table()?;
+        event.set("player_id", player_id)?;
+        event.set("command", command_string.as_str())?;
+
+        match callback.call::<(&'static str, mlua::Table), String>(("terminal_command", event)) {
+          Ok(result) => result_string = Some(result),
+          Err(what) => result_string = Some(what.to_string()),
+        }
+
+        Ok(())
+      },
+    );
+
+    // always send something even an empty string!
+    net.send_terminal_response(player_id, result_string.unwrap_or_default().as_str());
+  }
 }
 
 #[allow(clippy::too_many_arguments)]

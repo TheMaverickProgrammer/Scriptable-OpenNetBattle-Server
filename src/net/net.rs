@@ -2285,6 +2285,16 @@ impl Net {
     }
   }
 
+  pub fn send_terminal_response(&mut self, player_id: &str, result_string: &str) {
+    if let Some(client) = self.clients.get_mut(player_id) {
+      self.packet_orchestrator.borrow_mut().send(
+        client.socket_address,
+        Reliability::ReliableOrdered,
+        ServerPacket::TerminalResponse { result_string },
+      );
+    }
+  }
+
   // ugly opengl like context storing
   // needed to correctly track message owners send without adding extra parameters
   // luckily not visible to plugin authors
