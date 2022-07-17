@@ -11,6 +11,7 @@ use std::collections::VecDeque;
 pub struct LuaPluginInterface {
   scripts: Vec<Lua>,
   all_scripts: Vec<usize>,
+  command_scripts: HashMap<String, usize>,
   widget_trackers: HashMap<String, WidgetTracker<usize>>,
   battle_trackers: HashMap<String, VecDeque<usize>>,
   promise_manager: JobPromiseManager,
@@ -22,6 +23,7 @@ impl LuaPluginInterface {
     LuaPluginInterface {
       scripts: Vec::new(),
       all_scripts: Vec::new(),
+      command_scripts: HashMap::new(),
       widget_trackers: HashMap::new(),
       battle_trackers: HashMap::new(),
       promise_manager: JobPromiseManager::new(),
@@ -97,6 +99,25 @@ impl LuaPluginInterface {
       let require: mlua::Function = globals.get("require")?;
       require.call::<&str, ()>(final_path)?;
 
+      // Find commands registered to this script
+      let net_table: mlua::Table = globals.get("Net")?;
+
+      if let Ok(commands) = net_table.get::<_, mlua::Table>("_command_listeners") {
+        for pair in commands.pairs::<String, mlua::Function>() {
+          let (key, _) = pair?;
+
+          if self.command_scripts.contains_key(&key) {
+            error!(
+              "Command {} already registered in {:?}!",
+              key,
+              script_path.to_str()
+            );
+            continue;
+          }
+          self.command_scripts.insert(key, script_index);
+        }
+      }
+
       Ok(())
     })?;
 
@@ -106,6 +127,11 @@ impl LuaPluginInterface {
       .exec()?;
 
     Ok(())
+  }
+
+  // commands
+  pub fn get_script_index_for_command(&self, command_name: &String) -> Option<usize> {
+    Some(*self.command_scripts.get(command_name)?)
   }
 }
 
@@ -763,12 +789,38 @@ impl PluginInterface for LuaPluginInterface {
     );
   }
 
-  fn handle_terminal_command(&mut self, net: &mut Net, player_id: &str, command_string: String) {
+  // commands
+  fn handle_terminal_command(
+    &mut self,
+    net: &mut Net,
+    player_id: &str,
+    mut command_string: String,
+  ) -> Option<String> {
     let mut result_string: Option<String> = None;
 
-    handle_event(
+    command_string = command_string
+      .chars()
+      .filter(|c| *c != '\n' && *c != '\r' && *c != '\t')
+      .collect();
+
+    let mut tokens = command_string
+      .split_whitespace()
+      .map(|c| c.to_string())
+      .collect::<Vec<String>>();
+    if tokens.len() > 0 && tokens[0].starts_with('/') {
+      tokens[0] = tokens[0].replace("/", ""); // remove command prefix
+    } else {
+      return Some("Empty command".to_string());
+    }
+
+    let command = tokens[0].clone();
+    let args = &tokens[1..];
+
+    let script_index = self.get_script_index_for_command(&command)?;
+    handle_single_callback(
       &mut self.scripts,
-      &self.all_scripts,
+      script_index,
+      &"try_execute_command",
       &mut self.widget_trackers,
       &mut self.battle_trackers,
       &mut self.promise_manager,
@@ -777,9 +829,10 @@ impl PluginInterface for LuaPluginInterface {
       |lua_ctx, callback| {
         let event = lua_ctx.create_table()?;
         event.set("player_id", player_id)?;
-        event.set("command", command_string.as_str())?;
+        event.set("command", command.clone())?;
+        event.set("args", args)?;
 
-        match callback.call::<(&'static str, mlua::Table), String>(("terminal_command", event)) {
+        match callback.call::<_, String>((command.clone(), event)) {
           Ok(result) => result_string = Some(result),
           Err(what) => result_string = Some(what.to_string()),
         }
@@ -787,9 +840,7 @@ impl PluginInterface for LuaPluginInterface {
         Ok(())
       },
     );
-
-    // always send something even an empty string!
-    net.send_terminal_response(player_id, result_string.unwrap_or_default().as_str());
+    result_string
   }
 }
 
@@ -841,6 +892,63 @@ fn handle_event<F>(
         Ok(())
       })?;
     }
+    Ok(())
+  };
+
+  if let Err(err) = call_lua() {
+    error!("{:#}", err);
+  }
+}
+
+// Used for a function that expects a single implementation in one script
+#[allow(clippy::too_many_arguments)]
+fn handle_single_callback<F>(
+  scripts: &mut Vec<Lua>,
+  script_index: usize,
+  function_name: &str,
+  widget_tracker: &mut HashMap<String, WidgetTracker<usize>>,
+  battle_tracker: &mut HashMap<String, VecDeque<usize>>,
+  promise_manager: &mut JobPromiseManager,
+  lua_api: &mut LuaApi,
+  net: &mut Net,
+  fn_caller: F,
+) where
+  F: for<'lua> FnMut(&'lua mlua::Lua, mlua::Function<'lua>) -> mlua::Result<()>,
+{
+  let mut fn_caller = fn_caller;
+
+  let call_lua = || -> mlua::Result<()> {
+    let net_ref = RefCell::new(net);
+    let widget_tracker_ref = RefCell::new(widget_tracker);
+    let battle_tracker_ref = RefCell::new(battle_tracker);
+    let promise_manager_ref = RefCell::new(promise_manager);
+
+    // get target script
+    let lua_ctx = scripts.get_mut(script_index).unwrap();
+
+    let api_ctx = ApiContext {
+      script_index,
+      net_ref: &net_ref,
+      widget_tracker_ref: &widget_tracker_ref,
+      battle_tracker_ref: &battle_tracker_ref,
+      promise_manager_ref: &promise_manager_ref,
+    };
+
+    lua_api.inject_dynamic(lua_ctx, api_ctx, |lua_ctx| {
+      let globals = lua_ctx.globals();
+      let net_table: mlua::Table = globals.get("Net")?;
+
+      if let Ok(func) = net_table.get::<_, mlua::Function>(function_name) {
+        let binded_func = func.bind(net_table)?;
+
+        if let Err(err) = fn_caller(lua_ctx, binded_func) {
+          error!("{}", err);
+        }
+      }
+
+      Ok(())
+    })?;
+
     Ok(())
   };
 

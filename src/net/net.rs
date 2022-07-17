@@ -2289,7 +2289,7 @@ impl Net {
     if let Some(client) = self.clients.get_mut(player_id) {
       self.packet_orchestrator.borrow_mut().send(
         client.socket_address,
-        Reliability::ReliableOrdered,
+        Reliability::Reliable,
         ServerPacket::TerminalResponse { result_string },
       );
     }

@@ -249,7 +249,7 @@ fn parse_body(work_buf: &mut &[u8]) -> Option<ClientPacket> {
       ClientPacket::BattleResults { battle_stats }
     }),
     28 => Some(ClientPacket::TerminalCommand {
-      commands_string: read_string_u16(work_buf)?,
+      commands_string: read_string_u16(work_buf)?.trim().to_string(),
     }),
     _ => None,
   }

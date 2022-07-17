@@ -18,6 +18,24 @@ local bot_id = Net.create_bot({
 local mug_texture_path = "resources/ow/prog/prog_mug.png"
 local mug_animation_path = "resources/ow/prog/prog_mug.animation"
 
+Net:on_terminal_command("test", function(event)
+  return "AAAAAH THIS IS A REPLY"
+end)
+
+Net:on_terminal_command("teleport", function(event)
+  if #event.args < 3 then
+    return "hint: /teleport x y z"
+  end
+
+  local x = event.args[1]
+  local y = event.args[2]
+  local z = event.args[3]
+
+  Net.teleport_player(event.player_id, true, x, y, z, "Down")
+
+  return "teleporting player"
+end)
+
 Net:on("actor_interaction", function(event)
   local player_id = event.player_id
 

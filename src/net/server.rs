@@ -548,9 +548,16 @@ impl Server {
             debug!("Received TermincalCommand packet from {}", socket_address);
           }
 
-          self
-            .plugin_wrapper
-            .handle_terminal_command(net, player_id, commands_string);
+          let response =
+            self
+              .plugin_wrapper
+              .handle_terminal_command(net, player_id, commands_string);
+
+          // always senda something even an empty string!
+          net.send_terminal_response(
+            player_id,
+            response.unwrap_or("No response".to_string()).as_str(),
+          );
         }
       }
     } else {

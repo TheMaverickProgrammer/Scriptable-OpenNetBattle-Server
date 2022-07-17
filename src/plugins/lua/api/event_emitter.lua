@@ -6,7 +6,10 @@ function EventEmitter.new()
     _any_listeners = {},
     _pending_removal = {},
     _any_pending_removal = nil,
-    _destroy_listeners = {}
+    _destroy_listeners = {},
+
+    -- command listeners
+    _command_listeners = {},
   }
 
   setmetatable(emitter, EventEmitter)
@@ -21,7 +24,7 @@ function EventEmitter:emit(name, ...)
   local pending_removal = self._pending_removal[name]
 
   if pending_removal then
-    for _, dead_listener in ipairs(pending_removal) do
+    for _, dead_listener in ipairs(pending_removal) do 
       -- find and remove this listener
       for i, listener in ipairs(listeners) do
         if listener == dead_listener then
@@ -192,6 +195,31 @@ function EventEmitter:destroy()
   end
 
   self._destroy_listeners = nil
+end
+
+-- commands
+function EventEmitter:try_execute_command(name, ...)
+  local listener = self._command_listeners[name]
+  local response = ""
+  if listener then
+    response = listener(...)
+  end
+
+  if #response == 0 then
+    response = "No response"
+  end
+
+  return response
+end
+
+function EventEmitter:on_terminal_command(name, callback)
+  local command_listener = self._command_listeners[name]
+
+  if command_listener then
+    error("Command '"..name.."' already registered. Command names must be unique.")
+  else
+    self._command_listeners[name] = callback
+  end
 end
 
 Net = EventEmitter.new()
