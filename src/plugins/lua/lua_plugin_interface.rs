@@ -110,7 +110,7 @@ impl LuaPluginInterface {
             error!(
               "Command {} already registered in {:?}!",
               key,
-              script_path.to_str()
+              self.command_scripts.get(&key).unwrap()
             );
             continue;
           }
