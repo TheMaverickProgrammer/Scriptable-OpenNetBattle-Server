@@ -65,4 +65,24 @@ pub fn inject_dynamic(lua_api: &mut LuaApi) {
       lua_ctx.pack_multi(0)
     }
   });
+
+  lua_api.add_dynamic_function("Net", "read_asset", |api_ctx, lua_ctx, params| {
+    let path: mlua::String = lua_ctx.unpack_multi(params)?;
+    let path_str = path.to_str()?;
+    let net = api_ctx.net_ref.borrow();
+
+    if let Some(asset) = net.get_asset(path_str) {
+      match &asset.data {
+        AssetData::Text(text) => lua_ctx.pack_multi(text.clone()),
+        AssetData::Data(bytes)
+        | AssetData::Texture(bytes)
+        | AssetData::Audio(bytes) => {
+          let encoded = base64::encode(bytes);
+          lua_ctx.pack_multi(encoded)
+        }
+      }
+    } else {
+      lua_ctx.pack_multi(mlua::Value::Nil)
+    }
+  });
 }

@@ -649,6 +649,7 @@ Net.remove_asset(server_path)
 Net.has_asset(server_path)
 Net.get_asset_type(server_path)
 Net.get_asset_size(server_path)
+Net.read_asset(server_path) -- returns asset content as string (text assets) or base64 string (binary assets)
 ```
 
 ### Async API
